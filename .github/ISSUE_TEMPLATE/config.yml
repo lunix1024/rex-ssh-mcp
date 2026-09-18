@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 私下报告安全漏洞
+    url: https://github.com/lunix1024/rex-ssh-mcp/security/advisories/new
+    about: 请勿在公开 Issue 中披露漏洞或敏感信息

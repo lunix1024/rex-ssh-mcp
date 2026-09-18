@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+servers.json
+servers.json.tmp-*
+node_modules/
+dist/
+coverage/
+*.log
+npm-debug.log*
+logs/
+.test-tmp/
+*.tsbuildinfo
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

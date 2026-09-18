@@ -1,0 +1,41 @@
+name: Bug report
+description: 报告可复现的问题
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: 请先移除密码、令牌、真实服务器地址和未经脱敏的日志。安全漏洞请使用 Security Advisory 私下报告。
+  - type: input
+    id: version
+    attributes:
+      label: 版本或提交
+      placeholder: v2.0.0 或 commit SHA
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 运行环境
+      placeholder: Windows 11、Node.js 22.x、使用的 MCP 客户端
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 请使用虚构主机和脱敏数据。
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+    validations:
+      required: true
