@@ -7,7 +7,7 @@ import { SSHConnectionManager } from './ssh.js';
 import { cancellableInput, cancellablePassword, numberedSelect, type PromptResult } from './tui-prompts.js';
 
 type Action = 'add' | 'edit' | 'password' | 'test' | 'delete' | 'exit';
-type EditableField = 'alias' | 'host' | 'port' | 'username' | 'hostFingerprint';
+type EditableField = 'alias' | 'host' | 'port' | 'username';
 type EditMenuAction = EditableField | 'test' | 'save';
 type SaveDecision = 'save' | 'edit';
 const protector = new WindowsDpapiProtector();
@@ -91,7 +91,8 @@ function printServers(document: ServersDocument): void {
 
 /** 新增流程使用显式步骤游标，使 Esc 能回到上一个字段而不是丢弃整份输入。 */
 export async function addServer(document: ServersDocument, revision: string, services: ConfigCliFlowServices = defaultServices): Promise<void> {
-  const draft: Partial<Omit<StoredServerProfile, 'encryptedPassword'>> & { password?: string } = { port: 22 };
+  // 录入向导只收集基本连接信息；已有配置中的可选主机指纹仍由连接层兼容读取。
+  const draft: Partial<Omit<StoredServerProfile, 'encryptedPassword'>> = { port: 22 };
   let step = 0;
   for (;;) {
     if (step === 0) {
@@ -115,20 +116,10 @@ export async function addServer(document: ServersDocument, revision: string, ser
       draft.username = result.value; step += 1; continue;
     }
     if (step === 4) {
-      const result = await promptFingerprint(draft.hostFingerprint, services.prompts);
-      if (result.kind === 'back') { step -= 1; continue; }
-      draft.hostFingerprint = result.value || undefined; step += 1; continue;
-    }
-    if (step === 5) {
       const result = await promptPassword('SSH 密码', services.prompts);
       if (result.kind === 'back') { step -= 1; continue; }
-      draft.password = result.value; step += 1; continue;
-    }
-    if (step === 6) {
-      const result = await promptPassword('再次输入 SSH 密码', services.prompts);
-      if (result.kind === 'back') { step -= 1; continue; }
-      if (result.value !== draft.password) { services.error('\n两次输入的密码不一致，请重新确认。\n'); continue; }
-      const encryptedPassword = await services.encryptPassword(draft.password!);
+      // 密码只输入一次即加密；保存页返回时重新进入密码输入，Esc 可继续回退到登录用户。
+      const encryptedPassword = await services.encryptPassword(result.value);
       const profile = profileFromDraft(draft, encryptedPassword);
       const decision = await decideSave(profile, services);
       if (decision === 'edit') continue;
@@ -154,7 +145,6 @@ export async function editServer(document: ServersDocument, revision: string, se
           fieldChoice('host', '主机名/IP', draft.host, draft.host !== original.host),
           fieldChoice('port', 'SSH 端口', String(draft.port), draft.port !== original.port),
           fieldChoice('username', '登录用户', draft.username, draft.username !== original.username),
-          fieldChoice('hostFingerprint', '主机公钥指纹', draft.hostFingerprint ?? '未配置', draft.hostFingerprint !== original.hostFingerprint),
           { name: '测试当前草稿连接', value: 'test' },
           { name: dirty ? '保存全部修改' : '保存修改（当前无变更）', value: 'save' },
         ],
@@ -200,30 +190,20 @@ async function editField(field: EditableField, draft: StoredServerProfile, origi
     const result = await promptPort(draft.port, prompts);
     return result.kind === 'back' ? undefined : { ...draft, port: result.value };
   }
-  if (field === 'username') {
-    const result = await promptUsername(draft.username, prompts);
-    return result.kind === 'back' ? undefined : { ...draft, username: result.value };
-  }
-  const result = await promptFingerprint(draft.hostFingerprint, prompts);
-  return result.kind === 'back' ? undefined : { ...draft, hostFingerprint: result.value || undefined };
+  // 只更新用户选择的基本字段，保留旧配置已有的主机指纹等连接约束。
+  const result = await promptUsername(draft.username, prompts);
+  return result.kind === 'back' ? undefined : { ...draft, username: result.value };
 }
 
 export async function changePassword(document: ServersDocument, revision: string, services: ConfigCliFlowServices = defaultServices): Promise<void> {
   for (;;) {
     const original = await chooseServer(document, '选择要修改密码的服务器', services.prompts);
     if (!original) return;
-    let first: string | undefined;
-    let step = 0;
     for (;;) {
-      if (step === 0) {
-        const result = await promptPassword('新的 SSH 密码', services.prompts);
-        if (result.kind === 'back') break;
-        first = result.value; step = 1; continue;
-      }
-      const confirmation = await promptPassword('再次输入新的 SSH 密码', services.prompts);
-      if (confirmation.kind === 'back') { step = 0; continue; }
-      if (confirmation.value !== first) { services.error('\n两次输入的密码不一致，请重新确认。\n'); continue; }
-      const updated = { ...original, encryptedPassword: await services.encryptPassword(first!) };
+      // 修改密码与新增保持一致：输入一次后进入保存流程，返回编辑则允许重新输入。
+      const result = await promptPassword('新的 SSH 密码', services.prompts);
+      if (result.kind === 'back') break;
+      const updated = { ...original, encryptedPassword: await services.encryptPassword(result.value) };
       if (await decideSave(updated, services) === 'edit') continue;
       try { services.saveDocument({ version: 1, servers: document.servers.map((item) => item === original ? updated : item) }, revision); }
       catch (error) {
@@ -376,13 +356,6 @@ function promptUsername(current: string | undefined, prompts: ConfigCliPrompter)
   }).then((result) => result.kind === 'back' ? result : { kind: 'value' as const, value: result.value.trim() });
 }
 
-function promptFingerprint(current: string | undefined, prompts: ConfigCliPrompter) {
-  return prompts.input({
-    message: '主机公钥指纹（留空表示清除）', default: current ?? '',
-    validate: (value) => !value.trim() || /^SHA256:[A-Za-z0-9+/]{43}=?$/.test(value.trim()) ? true : '请输入 OpenSSH SHA256 指纹。',
-  }).then((result) => result.kind === 'back' ? result : { kind: 'value' as const, value: result.value.trim() });
-}
-
 function promptPassword(message: string, prompts: ConfigCliPrompter) {
   return prompts.password({ message, validate: (value) => value ? true : '密码不能为空。' });
 }
@@ -403,12 +376,17 @@ async function testStoredServer(profile: StoredServerProfile): Promise<void> {
   finally { manager.disconnect(); }
 }
 
-// 只有直接从命令行启动时才运行 main；测试导入工作流函数时不会意外打开 TUI。
-if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
-  void main().catch((error: unknown) => {
+/** 仓库入口和 npm 命令共用错误处理，导入工作流函数本身不会打开 TUI。 */
+export async function runConfigCli(): Promise<void> {
+  await main().catch((error: unknown) => {
     if (typeof error === 'object' && error !== null && 'name' in error && error.name === 'ExitPromptError') process.exit(0);
     const message = error instanceof AppError ? error.message : '配置工具意外退出。';
     console.error(message);
     process.exit(1);
   });
+}
+
+// 保留 node dist/config-cli.js 与 npm run config 的原有启动行为。
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
+  void runConfigCli();
 }

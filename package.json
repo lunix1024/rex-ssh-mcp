@@ -1,7 +1,6 @@
 {
   "name": "rex-ssh-mcp",
   "version": "2.0.0",
-  "private": true,
   "description": "MCP server for managing multiple remote Linux hosts over SSH with Windows DPAPI-protected credentials",
   "license": "MIT",
   "author": "lunix1024",
@@ -22,11 +21,21 @@
     "dpapi"
   ],
   "type": "module",
+  "bin": {
+    "rex-ssh-mcp": "dist/cli.js"
+  },
+  "files": [
+    "dist/**/*.js",
+    "README.en.md",
+    "LICENSE",
+    "SECURITY.md"
+  ],
   "engines": {
     "node": ">=22"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prepack": "npm run build",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "config": "npm run build --silent && node dist/config-cli.js",

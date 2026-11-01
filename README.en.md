@@ -27,6 +27,29 @@ Windows is required because stored credentials use DPAPI `CurrentUser` protectio
 
 ## Quick start
 
+The repository is ready to package for npm. Registry commands below require the maintainer to publish the corresponding version first.
+
+Configure hosts in an interactive Windows terminal, then configure your MCP client:
+
+```powershell
+npx -y rex-ssh-mcp config
+```
+
+```json
+{
+  "command": "npx",
+  "args": ["-y", "rex-ssh-mcp"]
+}
+```
+
+If a Windows client cannot launch `npx` directly, use `"command": "cmd"` with `"args": ["/c", "npx", "-y", "rex-ssh-mcp"]`. Use `rex-ssh-mcp@2.0.0` to pin the version. Global installation with `npm install -g rex-ssh-mcp` is also supported.
+
+The npm CLI stores `servers.json` and `logs/rex-ssh-mcp.log` under `~/.rex-ssh-mcp`, independently of the npm cache and working directory. Use `--help` to see the actual paths or `--version` to check the version. Set `REX_SSH_MCP_HOME` to override the data directory in both the configuration terminal and the MCP client's `env`.
+
+For existing users, point that variable to the repository directory or copy the existing `servers.json` into the user directory under the same Windows account. Credentials must be re-entered when changing machines or Windows accounts.
+
+## Run from source
+
 ```powershell
 git clone https://github.com/lunix1024/rex-ssh-mcp.git
 Set-Location rex-ssh-mcp
@@ -35,7 +58,9 @@ npm run build
 npm run config
 ```
 
-You can also double-click `config-servers.bat` to open the same configuration UI. It creates a local `servers.json`, which is ignored by Git. Do not edit passwords into that file manually.
+You can also double-click `config-servers.bat` to open the same configuration UI. Source entry points use the repository directory by default, preserving existing setups; `REX_SSH_MCP_HOME` overrides this location too. The local `servers.json` is ignored by Git. Do not edit passwords into that file manually.
+
+Adding a host asks for its alias, hostname/IP, port, username, and password once. Password changes also require a single entry. The UI no longer asks for host-key fingerprints; existing `hostFingerprint` values remain enforced and can be configured manually in `servers.json`.
 
 Start the stdio server with:
 

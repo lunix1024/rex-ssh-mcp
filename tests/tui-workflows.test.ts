@@ -102,6 +102,7 @@ test('字段编辑支持输入 Esc、连续暂存多个字段并且只写盘一�
   assert.equal(saved.port, 2222);
   assert.equal(saved.username, original.username);
   assert.equal(saved.encryptedPassword, original.encryptedPassword);
+  assert.equal(saved.hostFingerprint, original.hostFingerprint);
 });
 
 test('有未保存草稿时 Esc 进入确认，确认页 Esc 返回编辑，放弃后不写盘', async () => {
@@ -138,11 +139,73 @@ test('新增向导 Esc 逐字段回退，在首字段 Esc 后不加密也不保�
   assert.equal(harness.saved.length, 0);
 });
 
-test('修改密码确认页 Esc 返回首次输入，首次输入 Esc 返回服务器选择', async () => {
+test('新增只录入基本信息和一次密码，测试连接成功后保存', async () => {
+  // 严格队列保证登录用户之后直接输入密码，且保存前不会要求指纹或重复密码。
+  const harness = createHarness([
+    { kind: 'input', result: value('测试服务器') },
+    { kind: 'input', result: value('test.example.test') },
+    { kind: 'input', result: value('22') },
+    { kind: 'input', result: value('operator') },
+    { kind: 'password', result: value('new-secret') },
+    { kind: 'select', result: value('test') },
+  ]);
+
+  await addServer({ version: 1, servers: [] }, 'revision', harness.services);
+
+  assert.equal(harness.remaining.length, 0);
+  assert.deepEqual(harness.encrypted, ['new-secret']);
+  assert.equal(harness.saved.length, 1);
+  assert.deepEqual(harness.saved[0]!.servers, harness.tested);
+  assert.deepEqual(harness.saved[0]!.servers[0], {
+    alias: '测试服务器', host: 'test.example.test', port: 22, username: 'operator',
+    encryptedPassword: `dpapi:v1:${Buffer.from('new-secret').toString('base64')}`,
+  });
+});
+
+test('新增保存页 Esc 返回密码，密码页 Esc 返回登录用户', async () => {
+  const harness = createHarness([
+    { kind: 'input', result: value('测试服务器') },
+    { kind: 'input', result: value('test.example.test') },
+    { kind: 'input', result: value('22') },
+    { kind: 'input', result: value('operator') },
+    { kind: 'password', result: value('old-secret') },
+    { kind: 'select', result: back() },
+    { kind: 'password', result: back() },
+    { kind: 'input', result: value('new-operator') },
+    { kind: 'password', result: value('new-secret') },
+    { kind: 'select', result: value('direct') },
+  ]);
+
+  await addServer({ version: 1, servers: [] }, 'revision', harness.services);
+
+  assert.equal(harness.remaining.length, 0);
+  assert.equal(harness.saved.length, 1);
+  assert.equal(harness.saved[0]!.servers[0]!.username, 'new-operator');
+  assert.equal(harness.saved[0]!.servers[0]!.encryptedPassword,
+    `dpapi:v1:${Buffer.from('new-secret').toString('base64')}`);
+});
+
+test('修改密码只需输入一次，保存时保留原服务器信息', async () => {
   const harness = createHarness([
     { kind: 'select', result: value(original.alias) },
     { kind: 'password', result: value('new-secret') },
-    { kind: 'password', result: back() },
+    { kind: 'select', result: value('direct') },
+  ]);
+
+  await changePassword(document, 'revision', harness.services);
+
+  assert.equal(harness.remaining.length, 0);
+  assert.deepEqual(harness.encrypted, ['new-secret']);
+  assert.deepEqual(harness.saved, [{ version: 1, servers: [{
+    ...original, encryptedPassword: `dpapi:v1:${Buffer.from('new-secret').toString('base64')}`,
+  }] }]);
+});
+
+test('修改密码保存页 Esc 返回密码输入，输入页 Esc 返回服务器选择', async () => {
+  const harness = createHarness([
+    { kind: 'select', result: value(original.alias) },
+    { kind: 'password', result: value('new-secret') },
+    { kind: 'select', result: back() },
     { kind: 'password', result: back() },
     { kind: 'select', result: back() },
   ]);
@@ -150,7 +213,7 @@ test('修改密码确认页 Esc 返回首次输入，首次输入 Esc 返回服�
   await changePassword(document, 'revision', harness.services);
 
   assert.equal(harness.remaining.length, 0);
-  assert.equal(harness.encrypted.length, 0);
+  assert.deepEqual(harness.encrypted, ['new-secret']);
   assert.equal(harness.saved.length, 0);
 });
 

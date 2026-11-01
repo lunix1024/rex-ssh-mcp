@@ -13,6 +13,42 @@
 - Node.js 22 或更高版本
 - 允许密码认证和 SFTP 的远程 SSH 服务
 
+## 通过 npx 使用
+
+本仓库已支持 npm 打包；以下包名命令需要维护者先将对应版本发布到 npm。
+
+首次使用，在交互式终端中配置服务器：
+
+```powershell
+npx -y rex-ssh-mcp config
+```
+
+MCP 客户端配置：
+
+```json
+{
+  "command": "npx",
+  "args": ["-y", "rex-ssh-mcp"]
+}
+```
+
+如果 Windows 客户端无法直接启动 `npx`，可将 `command` 改为 `cmd`，`args` 改为 `["/c", "npx", "-y", "rex-ssh-mcp"]`。需要固定版本时，将包名改为 `rex-ssh-mcp@2.0.0`。
+
+无需克隆仓库或手动编译。`npx` 会下载并缓存发布包，然后启动 stdio 服务；也可用 `npm install -g rex-ssh-mcp` 全局安装，再运行 `rex-ssh-mcp config` 和 `rex-ssh-mcp`。
+
+npm 命令默认将配置保存到 `$HOME/.rex-ssh-mcp/servers.json`，日志保存到同目录的 `logs/rex-ssh-mcp.log`，升级或清理 npx 缓存不会删除这些数据。`npx -y rex-ssh-mcp --help` 可查看实际路径，`--version` 可查看版本。
+
+可设置环境变量 `REX_SSH_MCP_HOME` 指定数据目录；配置工具与 MCP 客户端需要使用相同的值。例如，继续使用已有仓库配置：
+
+```powershell
+$env:REX_SSH_MCP_HOME = 'D:/path/to/rex-ssh-mcp'
+npx -y rex-ssh-mcp config
+```
+
+在 MCP 客户端配置中同步添加 `"env": { "REX_SSH_MCP_HOME": "D:/path/to/rex-ssh-mcp" }`。也可以在相同 Windows 用户下将原有 `servers.json` 复制到默认用户目录；跨机器或更换用户时需要重新录入密码。
+
+## 从源码使用
+
 克隆、安装并编译：
 
 ```powershell
@@ -32,9 +68,11 @@ npm run config
 
 Windows 下也可以直接双击项目根目录的 `config-servers.bat`。脚本会自动切换到项目目录、检查 Node.js/npm/依赖，并打开同一个配置界面；启动失败时窗口会保留错误信息。
 
-TUI 支持查看、新增、编辑、修改密码、测试连接和删除服务器。密码输入会被遮罩，随后使用 Windows DPAPI `CurrentUser` 加密。配置保存在项目根目录的 `servers.json`，结构如下：
+TUI 支持查看、新增、编辑、修改密码、测试连接和删除服务器。密码输入会被遮罩，随后使用 Windows DPAPI `CurrentUser` 加密。从源码运行时，配置默认保存在项目根目录的 `servers.json`；npm 命令使用前文所述用户目录，设置 `REX_SSH_MCP_HOME` 可覆盖两种入口的目录。配置结构如下：
 
 菜单中的每个选项都有编号：输入编号会定位并高亮对应项，按 Enter 确认，也可以使用方向键。所有子页面按 Esc 返回上一层，主菜单按 Esc 退出。编辑服务器信息时会先展示各字段当前值，可只选择需要修改的字段；多项修改保存在内存草稿中，选择“保存全部修改”后才会一次性写入配置。
+
+新增服务器只需填写别名、主机名/IP、端口、登录用户和一次密码；修改密码也只需输入一次。配置界面不再提供主机指纹输入项，已有配置中的 `hostFingerprint` 仍会参与连接校验；如需配置指纹，可手动编辑该可选字段。
 
 ```json
 {
@@ -123,6 +161,24 @@ npm test
 ```
 
 测试使用本机环回 SSH/SFTP 服务，不连接真实服务器，覆盖配置校验、多服务器路由、连接复用与重连、热更新、危险命令、传输、输出限额以及多密码脱敏。DPAPI 往返测试仅在 Windows 运行。
+
+## npm 打包与发布
+
+```powershell
+npm test
+npm pack --dry-run
+npm pack
+```
+
+打包前会自动编译 TypeScript。发布包使用文件白名单，仅包含编译后的 JavaScript、包元数据、README、许可证和安全说明，不包含 `servers.json`、日志、测试或开发依赖。
+
+发布前可使用生成的本地包验证入口（文件名随版本变化）：
+
+```powershell
+npx -y --package ./rex-ssh-mcp-2.0.0.tgz rex-ssh-mcp --help
+```
+
+确认包名属于自己的 npm 账号、版本尚未发布后，由维护者运行 `npm login` 和 `npm publish`。如包名不可用，应先调整 `package.json` 中的名称并同步使用文档中的命令。
 
 ## 参与贡献
 

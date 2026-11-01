@@ -11,6 +11,7 @@ npm-debug.log*
 logs/
 .test-tmp/
 *.tsbuildinfo
+*.tgz
 .DS_Store
 Thumbs.db
 .idea/

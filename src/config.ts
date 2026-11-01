@@ -1,8 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import { AppError, errorCode } from './errors.js';
+import { DATA_DIRECTORY } from './paths.js';
 
 export interface SSHConfig {
   host: string;
@@ -32,7 +33,7 @@ export interface LoadedServersDocument {
   revision: string;
 }
 
-export const SERVERS_CONFIG_PATH = fileURLToPath(new URL('../servers.json', import.meta.url));
+export const SERVERS_CONFIG_PATH = join(DATA_DIRECTORY, 'servers.json');
 export const MISSING_CONFIG_REVISION = 'missing';
 
 const fingerprint = z.string().regex(/^SHA256:[A-Za-z0-9+/]{43}=?$/);
@@ -100,6 +101,8 @@ export function saveServersDocument(document: ServersDocument, expectedRevision:
   const raw = `${JSON.stringify(normalized, null, 2)}\n`;
   const tempPath = `${path}.tmp-${randomUUID()}`;
   try {
+    // npx 首次配置时用户数据目录可能尚不存在；仅在真正保存时创建目录。
+    mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     writeFileSync(tempPath, raw, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
     renameSync(tempPath, path);
   } catch {

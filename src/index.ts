@@ -1,16 +1,17 @@
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { loadServersDocument } from './config.js';
 import { AppError, redactText } from './errors.js';
 import { createFileLogSink, SafeLogger } from './logger.js';
 import { ServerConnectionPool } from './pool.js';
 import { createServer } from './server.js';
 import { SafeStdioTransport } from './transport.js';
+import { DATA_DIRECTORY } from './paths.js';
 
 async function main(): Promise<void> {
   // 启动时先验证文件结构；缺少文件被视为空配置，损坏文件则立即给出固定安全错误。
   loadServersDocument();
-  // 无论通过 dist/index.js 还是 src/index.ts 启动，日志都固定写到项目根目录的 logs 下。
-  const logPath = fileURLToPath(new URL('../logs/rex-ssh-mcp.log', import.meta.url));
+  // 日志与服务器配置使用同一数据目录，npm/npx 入口不会向安装缓存写入用户数据。
+  const logPath = join(DATA_DIRECTORY, 'logs', 'rex-ssh-mcp.log');
   const logger = new SafeLogger('', createFileLogSink(logPath));
   const pool = new ServerConnectionPool(logger);
   const { server } = createServer(pool, logger);
